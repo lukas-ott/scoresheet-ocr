@@ -8,6 +8,7 @@ const canvas = byId("sheet");
 const ctx = canvas.getContext("2d");
 const source = document.createElement("canvas");
 const suggestions = byId("suggestions");
+const cropForm = byId("crop-form");
 const entries = [];
 let photo;
 let rotation = 0;
@@ -50,12 +51,16 @@ function drawGrid() {
   if (photo) ctx.drawImage(source, 0, 0);
   const count = rowCount();
   const projection = blockProjection(corners);
-  byId("scan").disabled = !projection || !count || !!activeBatch || entries.length % 2 !== 0;
+  cropForm.hidden = !projection;
+  const incompletePair = entries.length % 2 !== 0;
+  byId("scan").disabled = byId("crop-manual").disabled = !projection || !!activeBatch || incompletePair;
+  byId("crop-blocked").hidden = !incompletePair;
+  byId("crop-blocked").textContent = incompletePair ? "The next move belongs to Black. Use Add moves manually to enter it before starting another block." : "";
   byId("undo-corner").disabled = !corners.length;
   const labels = ["top left", "top right", "bottom right", "bottom left"];
   byId("corner-status").textContent = corners.length < 4
     ? "Tap the " + labels[corners.length] + " corner."
-    : projection ? "Check the row count and column divider, then scan this block."
+    : projection ? "Four corners marked. Confirm the rows below."
       : "The corners cross or are too close. Undo a corner and try again.";
   const bounds = canvas.getBoundingClientRect();
   const scale = bounds.width ? canvas.width / bounds.width : 1;
@@ -97,6 +102,7 @@ canvas.addEventListener("click", event => {
     y: (event.clientY - bounds.top) * canvas.height / bounds.height,
   });
   drawGrid();
+  if (!cropForm.hidden) cropForm.scrollIntoView({ block: "nearest" });
 });
 
 byId("photo").addEventListener("change", async event => {
@@ -150,7 +156,7 @@ byId("undo-corner").addEventListener("click", () => {
 byId("rows").addEventListener("input", drawGrid);
 byId("split").addEventListener("input", drawGrid);
 
-function addEntry(crop = "") {
+function addEntry(crop = "", pending = !!crop) {
   const index = entries.length;
   const white = index % 2 === 0;
   const name = "Move " + (Math.floor(index / 2) + 1) + (white ? " White" : " Black");
@@ -171,7 +177,7 @@ function addEntry(crop = "") {
   input.setAttribute("autocapitalize", "off");
   input.setAttribute("aria-label", name);
   const status = document.createElement("small");
-  const entry = { node, input, status, crop, pending: !!crop, edited: false };
+  const entry = { node, input, status, crop, pending, edited: false };
   input.addEventListener("input", () => {
     entry.edited = true;
     entry.canonical = false;
@@ -270,9 +276,10 @@ function getWorker() {
   return worker;
 }
 
-byId("scan").addEventListener("click", () => {
+cropForm.addEventListener("submit", event => {
+  event.preventDefault();
   const projection = blockProjection(corners);
-  if (!projection || !rowCount()) return;
+  if (!projection || !rowCount() || activeBatch || entries.length % 2 !== 0) return;
   const rectified = document.createElement("canvas");
   rectified.width = projection.width;
   rectified.height = projection.height;
@@ -281,7 +288,19 @@ byId("scan").addEventListener("click", () => {
   const output = context.createImageData(rectified.width, rectified.height);
   straightenBlock(input, output, projection);
   context.putImageData(output, 0, 0);
-  beginScan(makeCrops(manualCells(rectified), rectified));
+  const crops = makeCrops(manualCells(rectified), rectified);
+  if (event.submitter === byId("crop-manual")) {
+    const first = entries.length;
+    crops.forEach(crop => addEntry(crop, false));
+    lastScan = { start: first, end: entries.length };
+    byId("scan-status").textContent = "Crops ready. Type each move beside its photo.";
+    resetBox();
+    validate();
+    entries[first].input.focus();
+    return;
+  }
+  beginScan(crops);
+  byId("review-heading").focus();
 });
 byId("undo-page").addEventListener("click", () => {
   const { start } = lastScan;
@@ -358,7 +377,12 @@ function validate() {
   byId("clear").disabled = byId("remove").disabled = !entries.length || !!activeBatch;
   byId("manual").disabled = !!activeBatch;
   byId("photo").disabled = !!activeBatch;
-  byId("upload-label").textContent = entries.length ? "Choose another page" : "Choose scoresheet photo";
+  const hasMoves = entries.length > 0;
+  byId("upload-label").textContent = hasMoves ? "Choose another page" : "Choose a photo";
+  byId("review-empty").hidden = hasMoves;
+  byId("review-settings").hidden = !hasMoves;
+  byId("export-controls").hidden = !hasMoves;
+  byId("remove").hidden = byId("clear").hidden = !hasMoves;
   byId("scan-options").hidden = !!activeBatch || !lastScan || lastScan.end !== entries.length;
   firstUnresolved = !activeBatch && firstIssue ? entries[firstIssue.index].input : undefined;
   byId("jump-review").hidden = !firstUnresolved;
@@ -379,7 +403,7 @@ function validate() {
   }));
   byId("review-status").textContent = activeBatch ? "Recognition is running." : firstIssue
     ? "Review move " + (Math.floor(firstIssue.index / 2) + 1) + (firstIssue.index % 2 === 0 ? " White." : " Black.")
-    : moves.length ? moves.length + " legal half-moves. PGN ready." : "Add moves to begin.";
+    : moves.length ? moves.length + " legal half-moves. PGN ready." : "";
 }
 
 byId("copy").addEventListener("click", async () => {
@@ -399,3 +423,5 @@ byId("download").addEventListener("click", () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
+
+validate();

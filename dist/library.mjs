@@ -67,6 +67,7 @@ function renderGame(game, remove) {
 async function initialize() {
   if (!supabaseUrl || !supabasePublishableKey) return;
   section.hidden = false;
+  byId("library-link").hidden = false;
   status.textContent = "Connecting to your game library…";
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm");
   const client = createClient(supabaseUrl, supabasePublishableKey, { auth: { flowType: "pkce" } });

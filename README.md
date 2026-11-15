@@ -12,7 +12,8 @@ Open http://127.0.0.1:8765/. Choose a photo to start scanning.
 The app looks for a regular table with paired move columns. For angled
 photos, use **Straighten a move block** and tap the four corners of a
 White and Black block. Set the number of rows and adjust the column
-divider to match the projected grid. Scan additional
+divider to match the projected grid. Choose **Read moves** for OCR or
+**Type from photo** to enter the moves beside their crops. Scan additional
 pages in the order they were written. Use **Undo last scan** to rescan a
 page or align it manually. Check the transcribed moves against the crops
 before copying or downloading the PGN.

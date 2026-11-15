@@ -2,62 +2,78 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f6f4ed">
+<meta name="theme-color" content="#f4f6fa">
 <title>Scoresheet to PGN</title>
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="sheet.css?v=3">
+<link rel="stylesheet" href="sheet.css?v=4">
+<body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="wordmark" href="./"><span class="brand-mark" aria-hidden="true">♞</span> Scoresheet</a>
+    <a id="library-link" href="#library" hidden>Saved games</a>
+  </div>
+</header>
 <main>
-  <header class="top">
-    <div>
-      <h1>Scoresheet to PGN</h1>
-      <p>Scan a handwritten game, check the moves, and export it.</p>
-    </div>
-    <a href="benchmark.html">OCR benchmark</a>
-  </header>
+  <div class="intro">
+    <h1>Scoresheet to PGN</h1>
+    <p>Turn a photographed chess game into a PGN you can save or share.</p>
+  </div>
 
   <div class="workspace">
-    <section aria-labelledby="scan-heading">
-      <h2 id="scan-heading">Scan your sheet</h2>
-      <p>Choose a photo to scan. If the sheet is angled, use the four-corner crop.</p>
+    <section class="panel scan-panel" aria-labelledby="scan-heading">
+      <h2 id="scan-heading">Scan a sheet</h2>
       <div class="upload">
-        <label id="upload-label" class="upload-button" for="photo">Choose scoresheet photo</label>
-        <input id="photo" class="visually-hidden" type="file" accept="image/*">
+        <p>Start with a photo of your scoresheet.</p>
+        <label id="upload-label" class="upload-button" for="photo">Choose a photo</label>
+        <input id="photo" class="visually-hidden" type="file" accept="image/*" aria-label="Choose a scoresheet photo">
+        <span>On-device recognition</span>
       </div>
       <p id="scan-status" class="scan-status" role="status">Your photo stays in this browser.</p>
       <progress id="scan-progress" aria-label="Recognition progress" hidden></progress>
       <details id="alignment" hidden>
         <summary>Straighten a move block</summary>
         <div id="image-tools" hidden>
-          <div class="actions">
-            <button id="rotate" class="secondary" type="button">Rotate 90°</button>
-            <button id="reset-box" class="secondary" type="button">Clear corners</button>
-          </div>
-          <p class="small">Choose one White and Black block. Leave out move numbers and headers.</p>
+          <p class="small">Mark one pair of White and Black columns. Leave the move numbers and headers outside the crop.</p>
           <p id="corner-status" role="status"></p>
           <canvas id="sheet" aria-label="Scoresheet photo for marking four corners"></canvas>
-          <button id="undo-corner" class="secondary" type="button" disabled>Undo last corner</button>
+          <div class="actions crop-tools">
+            <button id="undo-corner" class="secondary" type="button" disabled>Undo corner</button>
+            <button id="reset-box" class="secondary" type="button">Reset</button>
+            <button id="rotate" class="secondary" type="button">Rotate</button>
+          </div>
         </div>
-        <div class="scan-controls">
-          <label>Rows in selection <input id="rows" type="number" min="1" max="100" placeholder="e.g. 20"></label>
-          <label>White column width <input id="split" type="range" min="20" max="80" value="50"></label>
-        </div>
-        <label class="check"><input id="white-last" type="checkbox"> Last row has only a White move</label>
-        <div class="actions">
-          <button id="scan" type="button" disabled>Read and append moves</button>
-
-        </div>
+        <form id="crop-form" hidden>
+          <h3>Confirm the move rows</h3>
+          <p id="row-help">Count the rows inside the outline, including the last row if it has only a White move.</p>
+          <div class="scan-controls">
+            <label>Number of rows <input id="rows" type="number" inputmode="numeric" min="1" max="100" placeholder="e.g. 20" aria-describedby="row-help" required></label>
+            <label>White / Black divider <input id="split" type="range" min="20" max="80" value="50"></label>
+          </div>
+          <label class="check"><input id="white-last" type="checkbox"> Last row has only a White move</label>
+          <p id="crop-blocked" class="small" hidden></p>
+          <div class="actions">
+            <button id="scan" type="submit">Read moves</button>
+            <button id="crop-manual" class="secondary" type="submit">Type from photo</button>
+          </div>
+        </form>
       </details>
       <div id="scan-options" class="scan-options" hidden>
         <button id="undo-page" class="secondary" type="button">Undo last scan</button>
       </div>
     </section>
 
-    <section aria-labelledby="review-heading">
+    <section class="panel review-panel" aria-labelledby="review-heading">
       <div class="review-title">
-        <h2 id="review-heading">Review moves</h2>
+        <h2 id="review-heading" tabindex="-1">Review moves</h2>
         <button id="jump-review" type="button" class="secondary" hidden>First issue</button>
       </div>
-      <div class="review-controls">
+      <div id="review-empty" class="review-empty">
+        <span aria-hidden="true">♙</span>
+        <p>No moves yet</p>
+        <small>Scan a sheet or enter the moves yourself.</small>
+      </div>
+      <details id="review-settings" hidden>
+        <summary>Notation and clock settings</summary>
+        <div class="review-controls">
         <label>Handwritten notation
           <select id="language"><option value="en">English</option><option value="de">German</option><option value="fr">French</option><option value="es">Spanish</option></select>
         </label>
@@ -65,7 +81,9 @@
           <select id="clock"><option value="literal">Preserve as written</option><option value="clk">Time remaining</option><option value="emt">Time spent</option></select>
         </label>
       </div>
-      <p class="small">Type corrections and notes in the same field, e.g. <code>Sf3 (1:27) (=)</code>. OCR reads English move letters. Check other languages and add clock notes or draw offers during review.</p>
+        <p class="small">Use the move field for clock times and draw offers, for example <code>Sf3 (1:27) (=)</code>.</p>
+      </details>
+      <p id="review-status" role="status"></p>
       <div id="suggestions" class="suggestions" aria-label="Nearby legal moves for the first issue" hidden></div>
       <ol id="moves" aria-label="Move list"></ol>
       <div class="actions move-controls">
@@ -73,16 +91,15 @@
         <button id="remove" type="button" class="secondary" disabled>Remove last move</button>
         <button id="clear" type="button" class="secondary" disabled>Clear all</button>
       </div>
-      <div class="actions export-controls">
+      <div id="export-controls" class="actions export-controls" hidden>
         <label>Result <select id="result"><option value="*">Unknown</option><option>1-0</option><option>0-1</option><option>1/2-1/2</option></select></label>
         <button id="copy" class="secondary" type="button" disabled>Copy PGN</button>
         <button id="download" type="button" disabled>Download PGN</button>
       </div>
-      <p id="review-status" role="status">Add moves to begin.</p>
       <details id="preview" hidden><summary>PGN preview</summary><pre id="pgn"></pre></details>
     </section>
   </div>
-  <section id="library" aria-labelledby="library-heading" hidden>
+  <section class="panel" id="library" aria-labelledby="library-heading" hidden>
     <h2 id="library-heading">Saved games</h2>
     <form id="sign-in" class="actions" hidden>
       <label>Email <input id="email" type="email" autocomplete="email" required></label>
@@ -96,8 +113,9 @@
     <p id="library-status" role="status"></p>
     <ul id="saved-games" hidden></ul>
   </section>
-  <footer>Handwriting model by <a href="https://huggingface.co/GerhardTrippen/chess-ocr-bilstm">Gerhard Trippen</a>. First run downloads about 41 MB.</footer>
+  <footer><a href="https://huggingface.co/GerhardTrippen/chess-ocr-bilstm">Handwriting model</a></footer>
 </main>
-<script type="module" src="sheet.mjs?v=5"></script>
+<script type="module" src="sheet.mjs?v=6"></script>
+<script type="module" src="library.mjs?v=2"></script>
+</body>
 </html>
-<script type="module" src="library.mjs"></script>
