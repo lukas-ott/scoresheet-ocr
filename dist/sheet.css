@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   color-scheme: light;
@@ -62,7 +62,12 @@ button:disabled { opacity: .5; cursor: default; }
 }
 main { max-width: 1152px; margin: auto; padding: 36px 24px 24px; }
 .intro { margin-bottom: 25px; }
-h1 { font: 400 clamp(2.6rem, 6vw, 4.1rem)/1 "Instrument Serif", Georgia, serif; }
+h1 {
+  font-size: clamp(2rem, 5.5vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -.045em;
+}
 .intro p { margin-top: 9px; }
 h2 { font-size: 1.25rem; letter-spacing: -.02em; }
 h3 { font-size: 1rem; }
@@ -120,6 +125,15 @@ input[type=checkbox] { accent-color: var(--blue); }
 .export-controls { align-items: end; padding-top: 12px; border-top: 1px solid var(--line); }
 pre { padding: 12px; border-radius: 8px; background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 #library { margin-top: 18px; scroll-margin-top: 12px; }
+.library-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  max-width: 36rem;
+  margin-top: 12px;
+}
+.library-form input { width: 100%; }
 #saved-games { padding-left: 18px; }
 footer { margin-top: 18px; font-size: .82rem; }
 @media (max-width: 720px) {
@@ -131,4 +145,7 @@ footer { margin-top: 18px; font-size: .82rem; }
 }
 @media (max-width: 375px) {
   .ply { grid-template-columns: 1.65rem minmax(30px,.6fr) minmax(75px,1.2fr) minmax(45px,.7fr); gap: 5px; }
+}
+@media (max-width: 480px) {
+  .library-form { grid-template-columns: minmax(0, 1fr); }
 }

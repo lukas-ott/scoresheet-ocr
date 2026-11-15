@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4f6fa">
 <title>Scoresheet to PGN</title>
-<link rel="stylesheet" href="sheet.css?v=4">
+<link rel="stylesheet" href="sheet.css?v=6">
 <body>
 <header class="masthead">
   <div class="masthead-inner">
@@ -101,12 +101,12 @@
   </div>
   <section class="panel" id="library" aria-labelledby="library-heading" hidden>
     <h2 id="library-heading">Saved games</h2>
-    <form id="sign-in" class="actions" hidden>
+    <form id="sign-in" class="library-form" hidden>
       <label>Email <input id="email" type="email" autocomplete="email" required></label>
       <button id="send-link" type="submit">Email me a sign-in link</button>
     </form>
     <button id="sign-out" class="secondary" type="button" hidden>Sign out</button>
-    <form id="save-form" class="actions" hidden>
+    <form id="save-form" class="library-form" hidden>
       <label>Game title <input id="game-title" type="text" maxlength="120"></label>
       <button id="save-game" type="submit" disabled>Save current PGN</button>
     </form>
