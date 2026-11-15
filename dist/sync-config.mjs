@@ -1,3 +1,2 @@
-// Fill these in with your Supabase project URL and publishable key.
-export const supabaseUrl = "";
-export const supabasePublishableKey = "";
+export const supabaseUrl = "https://rbbqenenuprswwnmpauy.supabase.co";
+export const supabasePublishableKey = "sb_publishable_uuXCIqdwSmXuDoIZikwLFA_o6_d2IB0";
