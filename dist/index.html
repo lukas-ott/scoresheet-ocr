@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#f6f4ed">
 <title>Scoresheet to PGN</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="sheet.css?v=2">
+<link rel="stylesheet" href="sheet.css?v=3">
 <main>
   <header class="top">
     <div>
@@ -18,7 +18,7 @@
   <div class="workspace">
     <section aria-labelledby="scan-heading">
       <h2 id="scan-heading">Scan your sheet</h2>
-      <p>Take a straight-on photo of the page. Scanning starts as soon as you select it.</p>
+      <p>Choose a photo to scan. If the sheet is angled, use the four-corner crop.</p>
       <div class="upload">
         <label id="upload-label" class="upload-button" for="photo">Choose scoresheet photo</label>
         <input id="photo" class="visually-hidden" type="file" accept="image/*">
@@ -26,17 +26,19 @@
       <p id="scan-status" class="scan-status" role="status">Your photo stays in this browser.</p>
       <progress id="scan-progress" aria-label="Recognition progress" hidden></progress>
       <details id="alignment" hidden>
-        <summary>Adjust grid manually</summary>
+        <summary>Straighten a move block</summary>
         <div id="image-tools" hidden>
           <div class="actions">
             <button id="rotate" class="secondary" type="button">Rotate 90°</button>
-            <button id="reset-box" class="secondary" type="button">Reset selection</button>
+            <button id="reset-box" class="secondary" type="button">Clear corners</button>
           </div>
-          <canvas id="sheet" aria-label="Scoresheet image. Drag to select a block of rows."></canvas>
-          <p class="small">Drag around one White and Black block. Leave out the move numbers and headers.</p>
+          <p class="small">Choose one White and Black block. Leave out move numbers and headers.</p>
+          <p id="corner-status" role="status"></p>
+          <canvas id="sheet" aria-label="Scoresheet photo for marking four corners"></canvas>
+          <button id="undo-corner" class="secondary" type="button" disabled>Undo last corner</button>
         </div>
         <div class="scan-controls">
-          <label>Rows in selection <input id="rows" type="number" min="1" max="100" value="10"></label>
+          <label>Rows in selection <input id="rows" type="number" min="1" max="100" placeholder="e.g. 20"></label>
           <label>White column width <input id="split" type="range" min="20" max="80" value="50"></label>
         </div>
         <label class="check"><input id="white-last" type="checkbox"> Last row has only a White move</label>
@@ -96,6 +98,6 @@
   </section>
   <footer>Handwriting model by <a href="https://huggingface.co/GerhardTrippen/chess-ocr-bilstm">Gerhard Trippen</a>. First run downloads about 41 MB.</footer>
 </main>
-<script type="module" src="sheet.mjs?v=4"></script>
+<script type="module" src="sheet.mjs?v=5"></script>
 </html>
 <script type="module" src="library.mjs"></script>

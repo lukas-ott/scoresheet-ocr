@@ -1,4 +1,5 @@
 import { detectGrid } from "./grid.mjs";
+import { blockProjection, straightenBlock } from "./perspective.mjs";
 import { parseEntry, formatPgn, nearbyMoves } from "./notation.mjs";
 import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js";
 
@@ -10,8 +11,7 @@ const suggestions = byId("suggestions");
 const entries = [];
 let photo;
 let rotation = 0;
-let selection;
-let start;
+const corners = [];
 let worker;
 let activeBatch;
 let lastScan;
@@ -33,7 +33,7 @@ function renderPhoto() {
 }
 
 function resetBox() {
-  selection = undefined;
+  corners.length = 0;
   drawGrid();
 }
 
@@ -49,51 +49,55 @@ function splitRatio() {
 function drawGrid() {
   if (photo) ctx.drawImage(source, 0, 0);
   const count = rowCount();
-  byId("scan").disabled = !selection || !count || !!activeBatch || entries.length % 2 !== 0;
-  if (!selection) return;
-  const { x, y, width, height } = selection;
-  ctx.strokeStyle = "#097743";
-  ctx.lineWidth = Math.max(2, canvas.width / 300);
-  ctx.strokeRect(x, y, width, height);
+  const projection = blockProjection(corners);
+  byId("scan").disabled = !projection || !count || !!activeBatch || entries.length % 2 !== 0;
+  byId("undo-corner").disabled = !corners.length;
+  const labels = ["top left", "top right", "bottom right", "bottom left"];
+  byId("corner-status").textContent = corners.length < 4
+    ? "Tap the " + labels[corners.length] + " corner."
+    : projection ? "Check the row count and column divider, then scan this block."
+      : "The corners cross or are too close. Undo a corner and try again.";
+  const bounds = canvas.getBoundingClientRect();
+  const scale = bounds.width ? canvas.width / bounds.width : 1;
+  ctx.lineWidth = 2 * scale;
+  ctx.strokeStyle = "#16c681";
   ctx.beginPath();
-  const split = x + width * splitRatio();
-  ctx.moveTo(split, y);
-  ctx.lineTo(split, y + height);
-  for (let row = 1; row < count; row++) {
-    const line = y + row * height / count;
-    ctx.moveTo(x, line);
-    ctx.lineTo(x + width, line);
+  corners.forEach(({ x, y }, index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  if (corners.length === 4) ctx.closePath();
+  if (projection) {
+    const line = (u1, v1, u2, v2) => {
+      const first = projection.project(u1, v1);
+      const last = projection.project(u2, v2);
+      ctx.moveTo(first.x, first.y);
+      ctx.lineTo(last.x, last.y);
+    };
+    line(splitRatio(), 0, splitRatio(), 1);
+    for (let row = 1; row < count; row++) line(0, row / count, 1, row / count);
   }
   ctx.stroke();
+  corners.forEach(({ x, y }, index) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 10 * scale, 0, 2 * Math.PI);
+    ctx.fillStyle = "#254739";
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold " + 12 * scale + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(index + 1), x, y);
+  });
 }
 
-function point(event) {
+canvas.addEventListener("click", event => {
+  if (!photo || activeBatch || corners.length === 4) return;
   const bounds = canvas.getBoundingClientRect();
-  const x = (event.clientX - bounds.left) * canvas.width / bounds.width;
-  const y = (event.clientY - bounds.top) * canvas.height / bounds.height;
-  return { x: Math.min(canvas.width, Math.max(0, x)), y: Math.min(canvas.height, Math.max(0, y)) };
-}
-
-canvas.addEventListener("pointerdown", event => {
-  if (!photo || !event.isPrimary || event.button !== 0) return;
-  canvas.setPointerCapture(event.pointerId);
-  start = point(event);
-  selection = undefined;
+  corners.push({
+    x: (event.clientX - bounds.left) * canvas.width / bounds.width,
+    y: (event.clientY - bounds.top) * canvas.height / bounds.height,
+  });
   drawGrid();
 });
-canvas.addEventListener("pointermove", event => {
-  if (!start || !event.isPrimary) return;
-  const end = point(event);
-  const width = Math.abs(start.x - end.x);
-  const height = Math.abs(start.y - end.y);
-  selection = width < 8 || height < 8 ? undefined : {
-    x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width, height,
-  };
-  drawGrid();
-});
-for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
-  canvas.addEventListener(event, () => { start = undefined; });
-}
 
 byId("photo").addEventListener("change", async event => {
   const file = event.target.files[0];
@@ -120,7 +124,7 @@ byId("photo").addEventListener("change", async event => {
     }
     const cells = detectGrid(source.getContext("2d").getImageData(0, 0, source.width, source.height));
     if (!cells.length) {
-      byId("scan-status").textContent = "Couldn’t find a clear grid. Drag around the first move block below.";
+      byId("scan-status").textContent = "Couldn’t find a clear grid. Tap the four corners of a move block below.";
       byId("alignment").open = true;
       return;
     }
@@ -139,6 +143,10 @@ byId("rotate").addEventListener("click", () => {
   renderPhoto();
 });
 byId("reset-box").addEventListener("click", resetBox);
+byId("undo-corner").addEventListener("click", () => {
+  corners.pop();
+  drawGrid();
+});
 byId("rows").addEventListener("input", drawGrid);
 byId("split").addEventListener("input", drawGrid);
 
@@ -182,21 +190,20 @@ function removeEntry() {
   entry.node.remove();
 }
 
-function manualCells() {
-  const { x, y, width, height } = selection;
+function manualCells({ width, height }) {
   const count = rowCount();
   const rowHeight = height / count;
   const whiteWidth = width * splitRatio();
   const total = count * 2 - Number(byId("white-last").checked);
   return Array.from({ length: total }, (_, index) => {
     const black = index % 2 !== 0;
-    const left = x + (black ? whiteWidth : 0);
-    const top = y + Math.floor(index / 2) * rowHeight;
-    return { left, top, right: black ? x + width : x + whiteWidth, bottom: top + rowHeight };
+    const left = black ? whiteWidth : 0;
+    const top = Math.floor(index / 2) * rowHeight;
+    return { left, top, right: black ? width : whiteWidth, bottom: top + rowHeight };
   });
 }
 
-function makeCrops(cells) {
+function makeCrops(cells, image = source) {
   const crop = document.createElement("canvas");
   crop.width = 256;
   crop.height = 64;
@@ -208,7 +215,7 @@ function makeCrops(cells) {
     const insetY = Math.min(4, height * 0.1);
     drawing.fillStyle = "#fff";
     drawing.fillRect(0, 0, crop.width, crop.height);
-    drawing.drawImage(source, left + insetX, top + insetY, width - insetX * 2, height - insetY * 2,
+    drawing.drawImage(image, left + insetX, top + insetY, width - insetX * 2, height - insetY * 2,
       0, 0, crop.width, crop.height);
     return crop.toDataURL("image/png");
   });
@@ -263,7 +270,19 @@ function getWorker() {
   return worker;
 }
 
-byId("scan").addEventListener("click", () => beginScan(makeCrops(manualCells())));
+byId("scan").addEventListener("click", () => {
+  const projection = blockProjection(corners);
+  if (!projection || !rowCount()) return;
+  const rectified = document.createElement("canvas");
+  rectified.width = projection.width;
+  rectified.height = projection.height;
+  const context = rectified.getContext("2d");
+  const input = source.getContext("2d").getImageData(0, 0, source.width, source.height);
+  const output = context.createImageData(rectified.width, rectified.height);
+  straightenBlock(input, output, projection);
+  context.putImageData(output, 0, 0);
+  beginScan(makeCrops(manualCells(rectified), rectified));
+});
 byId("undo-page").addEventListener("click", () => {
   const { start } = lastScan;
   while (entries.length > start) removeEntry();

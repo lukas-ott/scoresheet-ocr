@@ -8,9 +8,11 @@ A static browser app for transcribing photographed chess scoresheets.
 python3 -m http.server 8765 --bind 127.0.0.1 --directory dist
 ```
 
-Open http://127.0.0.1:8765/. Choose a straight-on photo to start scanning.
-The app looks for a regular table with paired move columns. If it cannot
-locate the grid, it opens the manual alignment controls. Scan additional
+Open http://127.0.0.1:8765/. Choose a photo to start scanning.
+The app looks for a regular table with paired move columns. For angled
+photos, use **Straighten a move block** and tap the four corners of a
+White and Black block. Set the number of rows and adjust the column
+divider to match the projected grid. Scan additional
 pages in the order they were written. Use **Undo last scan** to rescan a
 page or align it manually. Check the transcribed moves against the crops
 before copying or downloading the PGN.
@@ -26,7 +28,7 @@ seconds and `87` as seconds. Literal mode preserves the original wording.
 ## Test
 
 ```sh
-node --test tests/scan.test.mjs
+node --test tests/*.test.mjs
 ```
 
 The crop benchmark at `/benchmark.html` uses BenjaminKost/processed_hcs,
