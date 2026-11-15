@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f6f4ed">
+<title>Scoresheet OCR Lab</title>
+<link rel="stylesheet" href="style.css">
+<main>
+  <header>
+    <svg width="39" height="39" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" fill="#254739"/><path fill="#fff" d="M11 31h19v-3H11zm2-5h15c0-6-1-11-6-14l-2-4-2 5-6 6 3 3 5-3c0 3-4 5-7 7z"/></svg>
+    <h1>Scoresheet OCR Lab</h1>
+    <p>Compare browser handwriting recognition with labeled chess moves.</p>
+  </header>
+  <section aria-labelledby="dataset-heading">
+    <h2 id="dataset-heading">Handwritten move samples</h2>
+    <p class="details">Labeled crops from the Handwritten Chess Scoresheet dataset.</p>
+    <div class="actions">
+      <button id="run" disabled>Run recognition</button>
+      <button id="next" class="secondary">Next 12 samples</button>
+    </div>
+    <p id="status" role="status">Loading samples…</p>
+    <div id="samples" class="samples"></div>
+  </section>
+  <footer>Data from <a href="https://huggingface.co/datasets/BenjaminKost/processed_hcs">BenjaminKost/processed_hcs</a>, derived from <a href="https://tc11.cvc.uab.es/datasets/HCS_1">Eicher et al., HCS</a> (CC BY 3.0). <a href="https://huggingface.co/GerhardTrippen/chess-ocr-bilstm">Chess OCR BiLSTM by Gerhard Trippen</a> runs on your device. HCS was used to train this model, so these results are a smoke test.</footer>
+</main>
+<script type="module" src="app.js?v=2"></script>
+</html>

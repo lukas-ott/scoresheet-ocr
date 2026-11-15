@@ -3,25 +3,99 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f6f4ed">
-<title>Scoresheet OCR Lab</title>
+<title>Scoresheet to PGN</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sheet.css?v=2">
 <main>
-  <header>
-    <svg width="39" height="39" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" fill="#254739"/><path fill="#fff" d="M11 31h19v-3H11zm2-5h15c0-6-1-11-6-14l-2-4-2 5-6 6 3 3 5-3c0 3-4 5-7 7z"/></svg>
-    <h1>Scoresheet OCR Lab</h1>
-    <p>Compare browser handwriting recognition with labeled chess moves.</p>
-  </header>
-  <section aria-labelledby="dataset-heading">
-    <h2 id="dataset-heading">Handwritten move samples</h2>
-    <p class="details">Labeled crops from the Handwritten Chess Scoresheet dataset.</p>
-    <div class="actions">
-      <button id="run" disabled>Run recognition</button>
-      <button id="next" class="secondary">Next 12 samples</button>
+  <header class="top">
+    <div>
+      <h1>Scoresheet to PGN</h1>
+      <p>Scan a handwritten game, check the moves, and export it.</p>
     </div>
-    <p id="status" role="status">Loading samples…</p>
-    <div id="samples" class="samples"></div>
+    <a href="benchmark.html">OCR benchmark</a>
+  </header>
+
+  <div class="workspace">
+    <section aria-labelledby="scan-heading">
+      <h2 id="scan-heading">Scan your sheet</h2>
+      <p>Take a straight-on photo of the page. Scanning starts as soon as you select it.</p>
+      <div class="upload">
+        <label id="upload-label" class="upload-button" for="photo">Choose scoresheet photo</label>
+        <input id="photo" class="visually-hidden" type="file" accept="image/*">
+      </div>
+      <p id="scan-status" class="scan-status" role="status">Your photo stays in this browser.</p>
+      <progress id="scan-progress" aria-label="Recognition progress" hidden></progress>
+      <details id="alignment" hidden>
+        <summary>Adjust grid manually</summary>
+        <div id="image-tools" hidden>
+          <div class="actions">
+            <button id="rotate" class="secondary" type="button">Rotate 90°</button>
+            <button id="reset-box" class="secondary" type="button">Reset selection</button>
+          </div>
+          <canvas id="sheet" aria-label="Scoresheet image. Drag to select a block of rows."></canvas>
+          <p class="small">Drag around one White and Black block. Leave out the move numbers and headers.</p>
+        </div>
+        <div class="scan-controls">
+          <label>Rows in selection <input id="rows" type="number" min="1" max="100" value="10"></label>
+          <label>White column width <input id="split" type="range" min="20" max="80" value="50"></label>
+        </div>
+        <label class="check"><input id="white-last" type="checkbox"> Last row has only a White move</label>
+        <div class="actions">
+          <button id="scan" type="button" disabled>Read and append moves</button>
+
+        </div>
+      </details>
+      <div id="scan-options" class="scan-options" hidden>
+        <button id="undo-page" class="secondary" type="button">Undo last scan</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="review-heading">
+      <div class="review-title">
+        <h2 id="review-heading">Review moves</h2>
+        <button id="jump-review" type="button" class="secondary" hidden>First issue</button>
+      </div>
+      <div class="review-controls">
+        <label>Handwritten notation
+          <select id="language"><option value="en">English</option><option value="de">German</option><option value="fr">French</option><option value="es">Spanish</option></select>
+        </label>
+        <label>Inline time means
+          <select id="clock"><option value="literal">Preserve as written</option><option value="clk">Time remaining</option><option value="emt">Time spent</option></select>
+        </label>
+      </div>
+      <p class="small">Type corrections and notes in the same field, e.g. <code>Sf3 (1:27) (=)</code>. OCR reads English move letters. Check other languages and add clock notes or draw offers during review.</p>
+      <div id="suggestions" class="suggestions" aria-label="Nearby legal moves for the first issue" hidden></div>
+      <ol id="moves" aria-label="Move list"></ol>
+      <div class="actions move-controls">
+        <button id="manual" type="button" class="secondary">Add moves manually</button>
+        <button id="remove" type="button" class="secondary" disabled>Remove last move</button>
+        <button id="clear" type="button" class="secondary" disabled>Clear all</button>
+      </div>
+      <div class="actions export-controls">
+        <label>Result <select id="result"><option value="*">Unknown</option><option>1-0</option><option>0-1</option><option>1/2-1/2</option></select></label>
+        <button id="copy" class="secondary" type="button" disabled>Copy PGN</button>
+        <button id="download" type="button" disabled>Download PGN</button>
+      </div>
+      <p id="review-status" role="status">Add moves to begin.</p>
+      <details id="preview" hidden><summary>PGN preview</summary><pre id="pgn"></pre></details>
+    </section>
+  </div>
+  <section id="library" aria-labelledby="library-heading" hidden>
+    <h2 id="library-heading">Saved games</h2>
+    <form id="sign-in" class="actions" hidden>
+      <label>Email <input id="email" type="email" autocomplete="email" required></label>
+      <button id="send-link" type="submit">Email me a sign-in link</button>
+    </form>
+    <button id="sign-out" class="secondary" type="button" hidden>Sign out</button>
+    <form id="save-form" class="actions" hidden>
+      <label>Game title <input id="game-title" type="text" maxlength="120"></label>
+      <button id="save-game" type="submit" disabled>Save current PGN</button>
+    </form>
+    <p id="library-status" role="status"></p>
+    <ul id="saved-games" hidden></ul>
   </section>
-  <footer>Data from <a href="https://huggingface.co/datasets/BenjaminKost/processed_hcs">BenjaminKost/processed_hcs</a>, derived from <a href="https://tc11.cvc.uab.es/datasets/HCS_1">Eicher et al., HCS</a> (CC BY 3.0). TrOCR Small runs on your device after its first download.</footer>
+  <footer>Handwriting model by <a href="https://huggingface.co/GerhardTrippen/chess-ocr-bilstm">Gerhard Trippen</a>. First run downloads about 41 MB.</footer>
 </main>
-<script type="module" src="app.js"></script>
+<script type="module" src="sheet.mjs?v=4"></script>
 </html>
+<script type="module" src="library.mjs"></script>

@@ -81,9 +81,9 @@ run.addEventListener("click", () => {
     result.textContent = "—";
     delete result.dataset.match;
   });
-  status.textContent = "Loading the handwriting model…";
+  status.textContent = "Loading the chess handwriting model (41 MB on first run)…";
   if (!worker) {
-    worker = new Worker(new URL("ocr.js", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("ocr.js?v=2", import.meta.url));
     worker.onmessage = ({ data }) => {
       if (data.type === "result") acceptResult(data);
       if (data.type === "status") status.textContent = data.text;
