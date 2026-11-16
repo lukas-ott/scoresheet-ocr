@@ -1,4 +1,6 @@
 import { detectGrid } from "./grid.mjs";
+import { clubCells, refineClubCells, sheetLayouts } from "./club-sheet.mjs?v=20";
+import { bestGamePath, detectEnglishNotation } from "./recognition.mjs?v=19";
 import { blockProjection, straightenBlock } from "./perspective.mjs";
 import { parseEntry, formatPgn, nearbyMoves } from "./notation.mjs";
 import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js";
@@ -9,6 +11,11 @@ const ctx = canvas.getContext("2d");
 const source = document.createElement("canvas");
 const suggestions = byId("suggestions");
 const cropForm = byId("crop-form");
+const formatControl = byId("sheet-format");
+const rowsInput = byId("rows");
+const lastMoveInput = byId("last-move");
+const clubLayout = () => sheetLayouts[formatControl.value];
+let heicDecoder;
 const entries = [];
 let photo;
 let rotation = 0;
@@ -18,6 +25,7 @@ let activeBatch;
 let lastScan;
 let firstUnresolved;
 let pgn = "";
+let reviewRevision = 0;
 
 function renderPhoto() {
   const side = rotation % 2;
@@ -53,7 +61,7 @@ function drawGrid() {
   const projection = blockProjection(corners);
   cropForm.hidden = !projection;
   const incompletePair = entries.length % 2 !== 0;
-  byId("scan").disabled = byId("crop-manual").disabled = !projection || !!activeBatch || incompletePair;
+  byId("scan").disabled = !projection || !!activeBatch || incompletePair;
   byId("crop-blocked").hidden = !incompletePair;
   byId("crop-blocked").textContent = incompletePair ? "The next move belongs to Black. Use Add moves manually to enter it before starting another block." : "";
   byId("undo-corner").disabled = !corners.length;
@@ -76,7 +84,15 @@ function drawGrid() {
       ctx.moveTo(first.x, first.y);
       ctx.lineTo(last.x, last.y);
     };
-    line(splitRatio(), 0, splitRatio(), 1);
+    if (clubLayout()) {
+      for (const [left, right] of clubLayout().blocks) {
+        for (const x of [left, (left + right) / 2, right]) {
+          if (x > 0 && x < 1) line(x, 0, x, 1);
+        }
+      }
+    } else {
+      line(splitRatio(), 0, splitRatio(), 1);
+    }
     for (let row = 1; row < count; row++) line(0, row / count, 1, row / count);
   }
   ctx.stroke();
@@ -105,15 +121,73 @@ canvas.addEventListener("click", event => {
   if (!cropForm.hidden) cropForm.scrollIntoView({ block: "nearest" });
 });
 
-byId("photo").addEventListener("change", async event => {
-  const file = event.target.files[0];
-  if (!file || activeBatch) return;
-  byId("scan-status").textContent = "Finding the move grid…";
-  const url = URL.createObjectURL(file);
+function updateFormat() {
+  const club = clubLayout();
+  byId("crop-help").textContent = club
+    ? club.boxed
+      ? "Tap the four outer corners of the move table, from the first White column to the last Black column. Leave the narrow number strip on the far left outside."
+      : "Mark the outside corners of all move blocks together. Start at the first White column and end at the last Black column. Start just above the first row and end just below the bottom visible row."
+    : "Mark one pair of White and Black columns. Leave the move numbers and headers outside the crop.";
+  byId("row-help").textContent = club
+    ? club.boxed
+      ? "Use 30 rows per column on a full sheet. The app detects the last move, or you can enter it below."
+      : "Use " + club.rows + " visible rows per block unless the photo cuts off the bottom. Enter the last move number to skip unused rows and signatures."
+    : "Count the rows inside the outline, including the last row if it has only a White move.";
+  byId("split-label").hidden = club;
+  byId("last-move-label").hidden = !club;
+  lastMoveInput.disabled = !club;
+  lastMoveInput.required = Boolean(club && !club.boxed);
+  lastMoveInput.placeholder = club?.boxed ? "Auto-detect" : "e.g. 35";
+  rowsInput.max = club ? club.rows : 100;
+  rowsInput.value = club ? club.rows : "";
+  resetBox();
+  if (club && photo) byId("alignment").open = true;
+}
+
+formatControl.addEventListener("change", updateFormat);
+updateFormat();
+
+async function decodeImage(blob) {
+  const url = URL.createObjectURL(blob);
   try {
     const image = new Image();
     image.src = url;
     await image.decode();
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function openPhoto(file) {
+  try {
+    return await decodeImage(file);
+  } catch (error) {
+    if (!/\.hei[cf]$/i.test(file.name) && !/^image\/hei[cf]/i.test(file.type)) throw error;
+    if (!heicDecoder) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/heic-to@1.5.2/dist/iife/heic-to.js";
+      heicDecoder = new Promise((resolve, reject) => {
+        script.onload = () => resolve(window.HeicTo);
+        script.onerror = reject;
+        document.head.append(script);
+      }).catch(error => {
+        heicDecoder = undefined;
+        script.remove();
+        throw error;
+      });
+    }
+    const convert = await heicDecoder;
+    return decodeImage(await convert({ blob: file, type: "image/png" }));
+  }
+}
+
+byId("photo").addEventListener("change", async event => {
+  const file = event.target.files[0];
+  if (!file || activeBatch) return;
+  byId("scan-status").textContent = "Finding the move grid…";
+  try {
+    const image = await openPhoto(file);
     if (event.target.files[0] !== file) return;
     photo = image;
     rotation = 0;
@@ -125,6 +199,11 @@ byId("photo").addEventListener("change", async event => {
     if (event.target.files[0] !== file || activeBatch) return;
     if (entries.length % 2 !== 0) {
       byId("scan-status").textContent = "Add the missing Black move or remove the previous White move before scanning this page.";
+      byId("alignment").open = true;
+      return;
+    }
+    if (clubLayout()) {
+      byId("scan-status").textContent = "Mark the four corners around all move blocks.";
       byId("alignment").open = true;
       return;
     }
@@ -140,8 +219,6 @@ byId("photo").addEventListener("change", async event => {
     if (event.target.files[0] === file) {
       byId("scan-status").textContent = "Couldn’t open that photo. Try a JPEG or PNG.";
     }
-  } finally {
-    URL.revokeObjectURL(url);
   }
 });
 byId("rotate").addEventListener("click", () => {
@@ -156,7 +233,7 @@ byId("undo-corner").addEventListener("click", () => {
 byId("rows").addEventListener("input", drawGrid);
 byId("split").addEventListener("input", drawGrid);
 
-function addEntry(crop = "", pending = !!crop) {
+function addEntry(crop = "") {
   const index = entries.length;
   const white = index % 2 === 0;
   const name = "Move " + (Math.floor(index / 2) + 1) + (white ? " White" : " Black");
@@ -164,10 +241,20 @@ function addEntry(crop = "", pending = !!crop) {
   node.className = "ply";
   const number = document.createElement("span");
   number.textContent = (Math.floor(index / 2) + 1) + (white ? "." : "…");
-  const thumbnail = crop ? new Image() : document.createElement("span");
+  const thumbnail = document.createElement(crop ? "button" : "span");
   if (crop) {
-    thumbnail.src = crop;
-    thumbnail.alt = name + " crop";
+    thumbnail.type = "button";
+    thumbnail.className = "crop-thumbnail";
+    thumbnail.setAttribute("aria-label", "Enlarge " + name.toLowerCase() + " crop");
+    const image = new Image();
+    image.src = crop;
+    image.alt = name + " crop";
+    thumbnail.append(image);
+    thumbnail.addEventListener("click", () => {
+      byId("crop-preview-title").textContent = name;
+      byId("crop-preview-image").src = crop;
+      byId("crop-preview").showModal();
+    });
   }
   const input = document.createElement("input");
   input.type = "text";
@@ -177,19 +264,24 @@ function addEntry(crop = "", pending = !!crop) {
   input.setAttribute("autocapitalize", "off");
   input.setAttribute("aria-label", name);
   const status = document.createElement("small");
-  const entry = { node, input, status, crop, pending, edited: false };
+  const entry = { node, input, status, crop, pending: !!crop, edited: false };
   input.addEventListener("input", () => {
+    reviewRevision++;
     entry.edited = true;
+    entry.checkReading = false;
     entry.canonical = false;
     validate();
   });
+  input.addEventListener("change", () => { void recheckAfter(entry); });
   node.append(number, thumbnail, input, status);
   byId("moves").append(node);
   entries.push(entry);
+  reviewRevision++;
   return entry;
 }
 
 function removeEntry() {
+  reviewRevision++;
   if (lastScan?.end === entries.length) lastScan.end--;
   if (lastScan?.start === lastScan?.end) lastScan = undefined;
   const entry = entries.pop();
@@ -214,7 +306,9 @@ function makeCrops(cells, image = source) {
   crop.width = 256;
   crop.height = 64;
   const drawing = crop.getContext("2d");
-  return cells.map(({ left, top, right, bottom }) => {
+  return cells.map(cell => {
+    if (!cell) return "";
+    const { left, top, right, bottom } = cell;
     const width = right - left;
     const height = bottom - top;
     const insetX = Math.min(5, width * 0.035);
@@ -227,7 +321,7 @@ function makeCrops(cells, image = source) {
   });
 }
 
-function beginScan(crops, ink = crops.map(() => true)) {
+function beginScan(crops, ink = crops.map(() => true), aspects, alternative) {
   const startIndex = entries.length;
   activeBatch = crops.map(crop => addEntry(crop));
   lastScan = { start: startIndex, end: entries.length };
@@ -238,7 +332,7 @@ function beginScan(crops, ink = crops.map(() => true)) {
   byId("scan-status").textContent = "Preparing recognition for " + crops.length + " move cells…";
   drawGrid();
   validate();
-  getWorker().postMessage(crops.map((crop, index) => ink[index] ? crop : null));
+  getWorker().postMessage({ sources: crops.map((crop, index) => ink[index] ? crop : null), useContrast: !!clubLayout(), aspects, alternative });
 }
 
 function finishBatch(message) {
@@ -250,10 +344,56 @@ function finishBatch(message) {
   validate();
 }
 
+async function checkReadings(batch, start, progress, isCurrent = () => true) {
+  const chess = new Chess();
+  const language = byId("language").value;
+  for (const entry of entries.slice(0, start)) {
+    const { move } = parseEntry(entry.input.value, entryLanguage(entry, language), "literal");
+    try { chess.move(move); } catch { return; }
+  }
+  const readings = [];
+  for (const entry of batch) {
+    if (!entry.readings?.some(view => view.text) || entry.edited) break;
+    readings.push(entry.readings);
+  }
+  const twoPanel = batch[0]?.twoPanelCrop;
+  const english = twoPanel && (batch[0].englishReading ?? detectEnglishNotation(readings));
+  if (twoPanel) batch.forEach(entry => { entry.englishReading = english; });
+  const german = language === "de" || (batch[0]?.tournamentCrop && !english);
+  const moves = await bestGamePath(Chess, chess.fen(), readings, german, progress, twoPanel);
+  if (!isCurrent()) return;
+  for (const [index, move] of moves.entries()) {
+    const entry = batch[index];
+    if (entry.edited) break;
+    const note = entry.readings.find(view => view.annotation)?.annotation;
+    entry.input.value = move.san + (note ? " " + note : "");
+    entry.checkReading = move.check || !!note;
+    entry.alternatives = move.options;
+  }
+}
+
+async function recheckAfter(editedEntry) {
+  if (activeBatch) return;
+  const start = entries.indexOf(editedEntry) + 1;
+  if (!entries[start]?.readings) return;
+  const revision = reviewRevision;
+  try {
+    await checkReadings(entries.slice(start), start, () => new Promise(resolve => setTimeout(resolve, 0)),
+      () => revision === reviewRevision && !activeBatch);
+  } catch (error) {
+    console.warn("Could not recheck later readings", error);
+  }
+  if (revision === reviewRevision && !activeBatch) validate();
+}
+
+function entryLanguage(entry, language) {
+  return entry.canonical || (entry.crop && !entry.edited) ? "en" : language;
+}
+
 function getWorker() {
   if (worker) return worker;
-  worker = new Worker(new URL("ocr.js?v=3", import.meta.url));
-  worker.onmessage = ({ data }) => {
+  worker = new Worker(new URL("ocr.js?v=7", import.meta.url));
+  worker.onmessage = async ({ data }) => {
     if (!activeBatch) return;
     if (data.type === "status") byId("scan-status").textContent = data.text;
     if (data.type === "result") {
@@ -261,11 +401,26 @@ function getWorker() {
       entry.pending = false;
       byId("scan-progress").value = data.index + 1;
       if (!entry.edited && typeof data.output === "string") entry.input.value = data.output;
+      entry.readings = data.readings;
+      entry.tournamentCrop = !!clubLayout();
+      entry.twoPanelCrop = Boolean(clubLayout()?.boxed);
       entry.ocrError = data.error;
       entry.blank = data.blank;
       validate();
     }
-    if (data.type === "done") finishBatch("Scan finished. Review the moves, or choose another page.");
+    if (data.type === "done") {
+      const batch = activeBatch;
+      try {
+        const start = entries.length - batch.length;
+        await checkReadings(batch, start, async index => {
+          byId("scan-status").textContent = "Checking possible readings for move " + (Math.floor((start + index) / 2) + 1) + "…";
+          await new Promise(resolve => setTimeout(resolve, 0));
+        });
+      } catch (error) {
+        console.warn("Could not check OCR readings against the game", error);
+      }
+      if (activeBatch === batch) finishBatch("Scan finished. Check the marked readings against their photos.");
+    }
     if (data.type === "error") finishBatch("Recognition failed. You can still type the moves from the crops. " + data.text);
   };
   worker.onerror = () => {
@@ -288,18 +443,26 @@ cropForm.addEventListener("submit", event => {
   const output = context.createImageData(rectified.width, rectified.height);
   straightenBlock(input, output, projection);
   context.putImageData(output, 0, 0);
-  const crops = makeCrops(manualCells(rectified), rectified);
-  if (event.submitter === byId("crop-manual")) {
-    const first = entries.length;
-    crops.forEach(crop => addEntry(crop, false));
-    lastScan = { start: first, end: entries.length };
-    byId("scan-status").textContent = "Crops ready. Type each move beside its photo.";
-    resetBox();
-    validate();
-    entries[first].input.focus();
+  const layout = clubLayout();
+  const lastMove = Number.isFinite(lastMoveInput.valueAsNumber) ? lastMoveInput.valueAsNumber : undefined;
+  const whiteLast = byId("white-last").checked;
+  const cells = layout
+    ? refineClubCells(layout, output, rowCount(), lastMove, lastMove !== undefined && whiteLast)
+    : manualCells(rectified);
+  if (!cells.some(Boolean)) {
+    byId("scan-status").textContent = "Couldn’t find written moves inside the outline. Adjust the corners or enter the last move.";
     return;
   }
-  beginScan(crops);
+  const crops = makeCrops(cells, rectified);
+  const aspect = cell => cell ? (cell.right - cell.left) / (cell.bottom - cell.top) : 1;
+  const aspects = clubLayout() ? cells.map(aspect) : undefined;
+  let alternative;
+  if (layout) {
+    const original = clubCells(layout, rectified.width, rectified.height, rowCount(),
+      Math.ceil(cells.length / 2), cells.length % 2 !== 0);
+    alternative = { sources: makeCrops(original, rectified), aspects: original.map(aspect) };
+  }
+  beginScan(crops, crops.map(Boolean), aspects, alternative);
   byId("review-heading").focus();
 });
 byId("undo-page").addEventListener("click", () => {
@@ -344,6 +507,8 @@ function validate() {
   const language = byId("language").value;
   const clock = byId("clock").value;
   let firstIssue;
+  let firstQuestion;
+  let questions = 0;
   let choices = [];
   for (const [index, entry] of entries.entries()) {
     entry.node.dataset.state = entry.pending ? "pending" : "";
@@ -351,15 +516,19 @@ function validate() {
       entry.status.textContent = entry.pending ? "Reading…" : entry.ocrError ? "OCR unread" : "Check earlier move";
       continue;
     }
-    const { move, comment } = parseEntry(entry.input.value, (entry.canonical || (entry.crop && !entry.edited)) ? "en" : language, clock);
+    const { move, comment } = parseEntry(entry.input.value, entryLanguage(entry, language), clock);
     if (!move) {
       firstIssue = { index, reason: entry.pending ? "Reading…" : entry.ocrError && !entry.edited ? "OCR failed. Type move." : entry.blank && !entry.edited ? "Blank cell. Check crop." : "Enter move" };
     } else {
       try {
         const legal = chess.move(move);
         moves.push({ san: legal.san, comment });
-        entry.node.dataset.state = "valid";
-        entry.status.textContent = legal.san;
+        entry.node.dataset.state = entry.checkReading ? "check" : "valid";
+        entry.status.textContent = entry.checkReading ? "Check " + legal.san : legal.san;
+        if (entry.checkReading) {
+          questions++;
+          firstQuestion ??= { index, choices: entry.alternatives };
+        }
       } catch {
         firstIssue = { index, reason: "Illegal move" };
         choices = nearbyMoves(move, chess.moves());
@@ -376,7 +545,8 @@ function validate() {
   byId("copy").disabled = byId("download").disabled = !pgn;
   byId("clear").disabled = byId("remove").disabled = !entries.length || !!activeBatch;
   byId("manual").disabled = !!activeBatch;
-  byId("photo").disabled = !!activeBatch;
+  byId("manual").hidden = !entries.length;
+  byId("photo").disabled = formatControl.disabled = !!activeBatch;
   const hasMoves = entries.length > 0;
   byId("upload-label").textContent = hasMoves ? "Choose another page" : "Choose a photo";
   byId("review-empty").hidden = hasMoves;
@@ -384,8 +554,11 @@ function validate() {
   byId("export-controls").hidden = !hasMoves;
   byId("remove").hidden = byId("clear").hidden = !hasMoves;
   byId("scan-options").hidden = !!activeBatch || !lastScan || lastScan.end !== entries.length;
-  firstUnresolved = !activeBatch && firstIssue ? entries[firstIssue.index].input : undefined;
+  const target = firstIssue ?? firstQuestion;
+  if (!firstIssue && firstQuestion) choices = firstQuestion.choices ?? [];
+  firstUnresolved = !activeBatch && target ? entries[target.index].input : undefined;
   byId("jump-review").hidden = !firstUnresolved;
+  byId("jump-review").textContent = firstIssue ? "First issue" : "Check a reading";
   suggestions.hidden = !!activeBatch || choices.length === 0;
   suggestions.replaceChildren(...choices.map(move => {
     const button = document.createElement("button");
@@ -393,17 +566,21 @@ function validate() {
     button.className = "secondary";
     button.textContent = move;
     button.addEventListener("click", () => {
-      const entry = entries[firstIssue.index];
+      const entry = entries[target.index];
       entry.input.value = entry.input.value.trim().replace(/^\S+?(?=\s|\(|\[|$)/, move);
+      reviewRevision++;
       entry.edited = entry.canonical = true;
+      entry.checkReading = false;
       validate();
       (firstUnresolved ?? entry.input).focus();
+      void recheckAfter(entry);
     });
     return button;
   }));
   byId("review-status").textContent = activeBatch ? "Recognition is running." : firstIssue
     ? "Review move " + (Math.floor(firstIssue.index / 2) + 1) + (firstIssue.index % 2 === 0 ? " White." : " Black.")
-    : moves.length ? moves.length + " legal half-moves. PGN ready." : "";
+    : questions ? "Check " + questions + " marked " + (questions === 1 ? "reading" : "readings") + " before export."
+      : moves.length ? moves.length + " legal half-moves. PGN ready." : "";
 }
 
 byId("copy").addEventListener("click", async () => {

@@ -149,3 +149,12 @@ footer { margin-top: 18px; font-size: .82rem; }
 @media (max-width: 480px) {
   .library-form { grid-template-columns: minmax(0, 1fr); }
 }
+.sheet-format, #last-move-label { display: grid; gap: 4px; margin-top: 10px; font-size: .86rem; font-weight: 650; }
+.crop-thumbnail, .crop-thumbnail:hover { background: var(--surface); padding: 0; min-width: 0; }
+.crop-thumbnail:hover { outline: 2px solid var(--blue); }
+#crop-preview { width: min(90vw, 540px); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+#crop-preview::backdrop { background: #17263a99; }
+#crop-preview img { display: block; width: 100%; margin: 12px 0; }
+
+.ply[data-state=check] input { border-color: #a16a21; }
+.ply[data-state=check] small { color: #74490e; }

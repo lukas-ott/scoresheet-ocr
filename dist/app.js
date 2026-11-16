@@ -83,7 +83,7 @@ run.addEventListener("click", () => {
   });
   status.textContent = "Loading the chess handwriting model (41 MB on first run)…";
   if (!worker) {
-    worker = new Worker(new URL("ocr.js?v=2", import.meta.url));
+    worker = new Worker(new URL("ocr.js?v=7", import.meta.url));
     worker.onmessage = ({ data }) => {
       if (data.type === "result") acceptResult(data);
       if (data.type === "status") status.textContent = data.text;
@@ -98,7 +98,7 @@ run.addEventListener("click", () => {
       finish("Couldn’t start the recognition worker. Check your connection and retry.");
     };
   }
-  worker.postMessage(rows.map(({ src }) => src));
+  worker.postMessage({ sources: rows.map(({ src }) => src), useContrast: false });
 });
 
 next.addEventListener("click", () => loadBatch(rows.length ? (offset + size) % total : 0));

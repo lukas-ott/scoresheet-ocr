@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4f6fa">
 <title>Scoresheet to PGN</title>
-<link rel="stylesheet" href="sheet.css?v=6">
+<link rel="stylesheet" href="sheet.css?v=9">
 <body>
 <header class="masthead">
   <div class="masthead-inner">
@@ -21,10 +21,13 @@
   <div class="workspace">
     <section class="panel scan-panel" aria-labelledby="scan-heading">
       <h2 id="scan-heading">Scan a sheet</h2>
+      <label class="sheet-format">Scoresheet layout
+        <select id="sheet-format"><option value="club30" selected>2 × 30 moves</option><option value="standard">Standard grid</option><option value="club20">3 blocks of 20 moves</option></select>
+      </label>
       <div class="upload">
         <p>Start with a photo of your scoresheet.</p>
         <label id="upload-label" class="upload-button" for="photo">Choose a photo</label>
-        <input id="photo" class="visually-hidden" type="file" accept="image/*" aria-label="Choose a scoresheet photo">
+        <input id="photo" class="visually-hidden" type="file" accept="image/*,.heic,.heif" aria-label="Choose a scoresheet photo">
         <span>On-device recognition</span>
       </div>
       <p id="scan-status" class="scan-status" role="status">Your photo stays in this browser.</p>
@@ -32,7 +35,7 @@
       <details id="alignment" hidden>
         <summary>Straighten a move block</summary>
         <div id="image-tools" hidden>
-          <p class="small">Mark one pair of White and Black columns. Leave the move numbers and headers outside the crop.</p>
+          <p id="crop-help" class="small">Mark one pair of White and Black columns. Leave the move numbers and headers outside the crop.</p>
           <p id="corner-status" role="status"></p>
           <canvas id="sheet" aria-label="Scoresheet photo for marking four corners"></canvas>
           <div class="actions crop-tools">
@@ -46,13 +49,13 @@
           <p id="row-help">Count the rows inside the outline, including the last row if it has only a White move.</p>
           <div class="scan-controls">
             <label>Number of rows <input id="rows" type="number" inputmode="numeric" min="1" max="100" placeholder="e.g. 20" aria-describedby="row-help" required></label>
-            <label>White / Black divider <input id="split" type="range" min="20" max="80" value="50"></label>
+            <label id="split-label">White / Black divider <input id="split" type="range" min="20" max="80" value="50"></label>
           </div>
-          <label class="check"><input id="white-last" type="checkbox"> Last row has only a White move</label>
+          <label id="last-move-label" hidden>Last move on this sheet <input id="last-move" type="number" inputmode="numeric" min="1" max="60" placeholder="e.g. 35" disabled></label>
+          <label class="check"><input id="white-last" type="checkbox"> Only White played the last move</label>
           <p id="crop-blocked" class="small" hidden></p>
           <div class="actions">
             <button id="scan" type="submit">Read moves</button>
-            <button id="crop-manual" class="secondary" type="submit">Type from photo</button>
           </div>
         </form>
       </details>
@@ -69,7 +72,7 @@
       <div id="review-empty" class="review-empty">
         <span aria-hidden="true">♙</span>
         <p>No moves yet</p>
-        <small>Scan a sheet or enter the moves yourself.</small>
+        <small>Choose a scoresheet photo to get started.</small>
       </div>
       <details id="review-settings" hidden>
         <summary>Notation and clock settings</summary>
@@ -113,9 +116,14 @@
     <p id="library-status" role="status"></p>
     <ul id="saved-games" hidden></ul>
   </section>
+  <dialog id="crop-preview" aria-labelledby="crop-preview-title">
+    <h2 id="crop-preview-title">Move photo</h2>
+    <img id="crop-preview-image" alt="Enlarged move cell">
+    <form method="dialog"><button type="submit">Close</button></form>
+  </dialog>
   <footer><a href="https://huggingface.co/GerhardTrippen/chess-ocr-bilstm">Handwriting model</a></footer>
 </main>
-<script type="module" src="sheet.mjs?v=6"></script>
+<script type="module" src="sheet.mjs?v=22"></script>
 <script type="module" src="library.mjs?v=2"></script>
 </body>
 </html>

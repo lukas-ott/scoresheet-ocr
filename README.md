@@ -8,23 +8,29 @@ A static browser app for transcribing photographed chess scoresheets.
 python3 -m http.server 8765 --bind 127.0.0.1 --directory dist
 ```
 
-Open http://127.0.0.1:8765/. Choose a photo to start scanning.
-The app looks for a regular table with paired move columns. For angled
-photos, use **Straighten a move block** and tap the four corners of a
-White and Black block. Set the number of rows and adjust the column
-divider to match the projected grid. Choose **Read moves** for OCR or
-**Type from photo** to enter the moves beside their crops. Scan additional
-pages in the order they were written. Use **Undo last scan** to rescan a
-page or align it manually. Check the transcribed moves against the crops
+Open http://127.0.0.1:8765/ and choose a photo. With the default
+2 × 30 layout, mark the four corners of the move table and choose **Read
+moves**. For other sheets, select the matching layout first. The
+standard layout can also look for a grid automatically. Use **Undo last
+scan** to retry a page. Check the transcribed moves against the crops
 before copying or downloading the PGN.
 
 OCR and chess validation run in the browser. The first scan needs
 network access to download the 41 MB recognition model and its runtime.
 Photos and crops stay in the page session. The editor accepts English,
-German, French, and Spanish notation. The model was trained on English
-moves, so correct other piece letters and enter or check clock notes
-and draw offers during review. Clock modes interpret `1:27` as minutes and
+German, French, and Spanish notation. The scanner compares
+candidate readings against legal moves. The two tournament layouts also
+use PaddleOCR's Latin recognizer to help read German notation. Check
+highlighted readings and clock notes against the crops. Clock modes interpret `1:27` as minutes and
 seconds and `87` as seconds. Literal mode preserves the original wording.
+
+**2 × 30 moves** is the default layout. Mark the move
+table from the first White column to the last Black column. The app
+follows the printed rules and estimates the last written move. You can
+override that estimate in the scan controls. Use the visible row count if
+the bottom is cut off. The Heidelberg form uses **3 blocks of 20 moves**.
+Tap a cropped move to enlarge it while reviewing. HEIC decoding and
+photo processing run in the browser.
 
 ## Test
 
