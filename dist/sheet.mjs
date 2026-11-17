@@ -1,6 +1,7 @@
+import { buildMoveBoxes, findBoxedTable, locateMoveBoxes } from "./box-grid.mjs?v=25";
 import { detectGrid } from "./grid.mjs";
-import { clubCells, refineClubCells, sheetLayouts } from "./club-sheet.mjs?v=20";
-import { bestGamePath, detectEnglishNotation } from "./recognition.mjs?v=19";
+import { classifyBoxCells, clubCells, refineClubCells, sheetLayouts, trimBoxCells } from "./club-sheet.mjs?v=23";
+import { bestGamePath, detectEnglishNotation } from "./recognition.mjs?v=26";
 import { blockProjection, straightenBlock } from "./perspective.mjs";
 import { parseEntry, formatPgn, nearbyMoves } from "./notation.mjs";
 import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js";
@@ -20,6 +21,7 @@ const entries = [];
 let photo;
 let rotation = 0;
 const corners = [];
+let cachedBoxes;
 let worker;
 let activeBatch;
 let lastScan;
@@ -42,6 +44,7 @@ function renderPhoto() {
 }
 
 function resetBox() {
+  cachedBoxes = undefined;
   corners.length = 0;
   drawGrid();
 }
@@ -77,7 +80,16 @@ function drawGrid() {
   ctx.beginPath();
   corners.forEach(({ x, y }, index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
   if (corners.length === 4) ctx.closePath();
-  if (projection) {
+  const detected = projection && clubLayout()?.boxed && count && !activeBatch ? fittedBoxes(count) : undefined;
+  if (detected) {
+    for (const cell of detected.cells) {
+      if (!cell) continue;
+      const [first, ...others] = cell.corners;
+      ctx.moveTo(first.x, first.y);
+      for (const point of others) ctx.lineTo(point.x, point.y);
+      ctx.closePath();
+    }
+  } else if (projection) {
     const line = (u1, v1, u2, v2) => {
       const first = projection.project(u1, v1);
       const last = projection.project(u2, v2);
@@ -203,6 +215,16 @@ byId("photo").addEventListener("change", async event => {
       return;
     }
     if (clubLayout()) {
+      if (clubLayout().boxed) {
+        const detected = findBoxedTable(sourcePixels());
+        if (detected) {
+          corners.push(...detected);
+          byId("alignment").open = true;
+          drawGrid();
+          byId("scan-status").textContent = "Grid detected. Check that the outline starts at move 1 and ends at move 30. Use Reset to mark it yourself.";
+          return;
+        }
+      }
       byId("scan-status").textContent = "Mark the four corners around all move blocks.";
       byId("alignment").open = true;
       return;
@@ -217,6 +239,10 @@ byId("photo").addEventListener("change", async event => {
     beginScan(crops, cells.map(cell => cell.ink));
   } catch {
     if (event.target.files[0] === file) {
+      photo = undefined;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      resetBox();
+      byId("alignment").hidden = true;
       byId("scan-status").textContent = "Couldn’t open that photo. Try a JPEG or PNG.";
     }
   }
@@ -299,6 +325,43 @@ function manualCells({ width, height }) {
     const top = Math.floor(index / 2) * rowHeight;
     return { left, top, right: black ? width : whiteWidth, bottom: top + rowHeight };
   });
+}
+
+function fittedBoxes(rows, input) {
+  const key = JSON.stringify([rows, corners]);
+  if (cachedBoxes?.key === key) return cachedBoxes.value;
+  const fit = locateMoveBoxes(input ?? sourcePixels(), corners, rows);
+  const value = fit ? { fit, cells: buildMoveBoxes(fit, rows) } : undefined;
+  cachedBoxes = { key, value };
+  return value;
+}
+
+function sourcePixels() {
+  return source.getContext("2d").getImageData(0, 0, source.width, source.height);
+}
+
+function makeBoxCrops(cells, input) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const drawing = canvas.getContext("2d");
+  const pixels = drawing.createImageData(canvas.width, canvas.height);
+  const aspects = [];
+  const crops = cells.map((cell, index) => {
+    const box = cell && blockProjection(cell.corners);
+    if (!box) {
+      aspects[index] = 1;
+      return "";
+    }
+    const insetX = Math.min(0.035, 5 / box.width);
+    const insetY = Math.min(0.10, 4 / box.height);
+    const project = (x, y) => box.project(insetX + (1 - 2 * insetX) * x, insetY + (1 - 2 * insetY) * y);
+    straightenBlock(input, pixels, { project });
+    drawing.putImageData(pixels, 0, 0);
+    aspects[index] = (box.width * (1 - 2 * insetX)) / (box.height * (1 - 2 * insetY));
+    return canvas.toDataURL("image/png");
+  });
+  return { crops, aspects };
 }
 
 function makeCrops(cells, image = source) {
@@ -435,19 +498,34 @@ cropForm.addEventListener("submit", event => {
   event.preventDefault();
   const projection = blockProjection(corners);
   if (!projection || !rowCount() || activeBatch || entries.length % 2 !== 0) return;
+  const input = sourcePixels();
+  const layout = clubLayout();
+  const rows = rowCount();
+  const lastMove = Number.isFinite(lastMoveInput.valueAsNumber) ? lastMoveInput.valueAsNumber : undefined;
+  const whiteLast = lastMove !== undefined && byId("white-last").checked;
+  const detected = layout?.boxed && fittedBoxes(rows, input);
+  if (detected) {
+    const { fit } = detected;
+    const classified = classifyBoxCells(detected.cells, fit.gray, fit.warp.width);
+    const cells = lastMove === undefined ? trimBoxCells(classified) : classified.slice(0, lastMove * 2 - Number(whiteLast));
+    if (!cells.some(Boolean)) {
+      byId("scan-status").textContent = "No written moves found. Adjust the outline or enter the last move.";
+      return;
+    }
+    const { crops, aspects } = makeBoxCrops(cells, input);
+    beginScan(crops, cells.map(cell => Boolean(cell && (lastMove !== undefined || cell.ink !== "blank"))), aspects);
+    byId("review-heading").focus();
+    return;
+  }
   const rectified = document.createElement("canvas");
   rectified.width = projection.width;
   rectified.height = projection.height;
   const context = rectified.getContext("2d");
-  const input = source.getContext("2d").getImageData(0, 0, source.width, source.height);
   const output = context.createImageData(rectified.width, rectified.height);
   straightenBlock(input, output, projection);
   context.putImageData(output, 0, 0);
-  const layout = clubLayout();
-  const lastMove = Number.isFinite(lastMoveInput.valueAsNumber) ? lastMoveInput.valueAsNumber : undefined;
-  const whiteLast = byId("white-last").checked;
   const cells = layout
-    ? refineClubCells(layout, output, rowCount(), lastMove, lastMove !== undefined && whiteLast)
+    ? refineClubCells(layout, output, rowCount(), lastMove, whiteLast)
     : manualCells(rectified);
   if (!cells.some(Boolean)) {
     byId("scan-status").textContent = "Couldn’t find written moves inside the outline. Adjust the corners or enter the last move.";

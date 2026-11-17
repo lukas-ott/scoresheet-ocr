@@ -9,8 +9,8 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory dist
 ```
 
 Open http://127.0.0.1:8765/ and choose a photo. With the default
-2 × 30 layout, mark the four corners of the move table and choose **Read
-moves**. For other sheets, select the matching layout first. The
+2 × 30 layout, check the suggested outline or mark the four corners of
+the move table, then choose **Read moves**. For other sheets, select the matching layout first. The
 standard layout can also look for a grid automatically. Use **Undo last
 scan** to retry a page. Check the transcribed moves against the crops
 before copying or downloading the PGN.
@@ -26,8 +26,8 @@ seconds and `87` as seconds. Literal mode preserves the original wording.
 
 **2 × 30 moves** is the default layout. Mark the move
 table from the first White column to the last Black column. The app
-follows the printed rules and estimates the last written move. You can
-override that estimate in the scan controls. Use the visible row count if
+fits the printed grid, straightens each move box, and estimates the
+last written move. You can override that estimate in the scan controls. Use the visible row count if
 the bottom is cut off. The Heidelberg form uses **3 blocks of 20 moves**.
 Tap a cropped move to enlarge it while reviewing. HEIC decoding and
 photo processing run in the browser.

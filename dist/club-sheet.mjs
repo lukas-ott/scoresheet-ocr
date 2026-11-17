@@ -60,9 +60,19 @@ export function refineClubCells(layout, image, visibleRows, lastMove, whiteLast)
     };
   });
   if (!layout.boxed || lastMove !== undefined) return aligned;
+  return trimBoxCells(classifyBoxCells(aligned, gray, width));
+}
 
+export function classifyBoxCells(cells, gray, width) {
+  return cells.map(cell => {
+    if (!cell) return cell;
+    return { ...cell, ink: boxInk(gray, width, cell) };
+  });
+}
+
+export function trimBoxCells(aligned) {
   // Stop before the blank rows at the end of a game, including any signature below them.
-  const occupied = aligned.map(cell => Boolean(cell && hasBoxInk(gray, width, cell)));
+  const occupied = aligned.map(cell => Boolean(cell && cell.ink === "written"));
   const blankAt = index => Boolean(aligned[index] && !occupied[index]);
   const emptyTail = occupied.findIndex((ink, index) => {
     if (index < 8 || ink || !blankAt(index) || !blankAt(index + 1) || !blankAt(index + 2)) return false;
@@ -80,7 +90,7 @@ export function refineClubCells(layout, image, visibleRows, lastMove, whiteLast)
   return aligned.slice(0, end);
 }
 
-function hasBoxInk(gray, stride, cell) {
+function boxInk(gray, stride, cell) {
   const { left, right, top, bottom } = cell;
   const width = right - left;
   const height = bottom - top;
@@ -89,8 +99,9 @@ function hasBoxInk(gray, stride, cell) {
   const y0 = Math.ceil(top + height * 0.20);
   const y1 = Math.floor(bottom - height * 0.18);
   const radius = Math.max(2, Math.round(height * 0.13));
-  if (x1 <= x0 || y1 <= y0) return false;
+  if (x1 <= x0 || y1 <= y0) return "uncertain";
   const columns = new Uint16Array(x1 - x0);
+  const verticalRadius = radius * stride;
   let total = 0;
   let usedRows = 0;
   for (let y = y0; y < y1; y++) {
@@ -98,7 +109,6 @@ function hasBoxInk(gray, stride, cell) {
     for (let x = x0; x < x1; x++) {
       const index = y * stride + x;
       const across = Math.max(gray[index - radius], gray[index + radius]);
-      const verticalRadius = radius * stride;
       const along = Math.max(gray[index - verticalRadius], gray[index + verticalRadius]);
       if (Math.min(across, along) - gray[index] >= 23) {
         row++;
@@ -109,9 +119,10 @@ function hasBoxInk(gray, stride, cell) {
     total += row;
   }
   const usedColumns = columns.reduce((sum, count) => sum + Number(count >= 2), 0);
-  return usedRows >= Math.max(3, height * 0.13)
+  if (usedRows >= Math.max(3, height * 0.13)
     && usedColumns >= Math.max(3, width * 0.032)
-    && total >= Math.max(9, width * height * 0.0022);
+    && total >= Math.max(9, width * height * 0.0022)) return "written";
+  return total < 3 ? "blank" : "uncertain";
 }
 
 function traceRail(gray, width, height, expected, rows) {

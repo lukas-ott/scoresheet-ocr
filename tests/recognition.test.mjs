@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { alphabet, bestGamePath, detectEnglishNotation, rankMoves } from "../dist/recognition.mjs";
 
-function frames(text) {
+function frames(text, symbols = alphabet) {
   const scores = [];
   for (const character of [...text, ""]) {
-    scores.push(...alphabet.map(letter => letter === character ? 0 : -30));
-    scores.push(...alphabet.map(letter => letter === "" ? 0 : -30));
+    scores.push(...symbols.map(letter => letter === character ? 0 : -30));
+    scores.push(...symbols.map(letter => letter === "" ? 0 : -30));
   }
   return [{ text, scores }];
 }
@@ -44,4 +44,23 @@ test("detects English piece letters from the Latin OCR without counting alternat
   assert.equal(detectEnglishNotation(readings(["Nf3", "Bb5+", "Re1 (1:27)", "d4", "Da5"])), true);
   assert.equal(detectEnglishNotation(readings(["Nf3", "Bb5", "Sf6", "Da5", "Le3"])), false);
   assert.equal(detectEnglishNotation(readings(["Nf3", "Bb5", "d4"])), false);
+});
+
+test("keeps a clear opening move when the general OCR cannot read its file letter", async () => {
+  class OpeningPosition {
+    moves() { return ["d4", "e4"]; }
+    move(san) { return { san }; }
+    fen() { return "opening"; }
+    undo() {}
+  }
+  const [chessReading] = frames("e4");
+  chessReading.scores[alphabet.indexOf("d")] = -4;
+  const symbols = [...alphabet, "?"];
+  const [generalReading] = frames("?4", symbols);
+  generalReading.symbols = symbols;
+  generalReading.scores[symbols.indexOf("d")] = -0.2;
+  generalReading.scores[symbols.indexOf("e")] = -3;
+  const path = await bestGamePath(OpeningPosition, "opening", [[chessReading, generalReading]], false, undefined, true);
+  assert.equal(path[0].san, "e4");
+  assert.equal(path[0].check, true);
 });

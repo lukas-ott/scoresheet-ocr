@@ -101,22 +101,30 @@ function latinSpellings(san, german, preferLatin = false) {
   return forms;
 }
 
+function looksLikeEnglishMove(text) {
+  return /^(?:[KQRBN]?[a-h1-8]?x?[a-h][1-8](?:=?[QRBN])?[+#]?|[O0]-[O0](?:-[O0])?)$/.test(text.trim());
+}
+
 function readingRanker(reading, german, preferLatin = false) {
   const views = reading.map(({ scores, text, symbols }) => {
     const lookup = symbols ? new Map(symbols.map((letter, index) => [letter, index])) : indices;
     const movePrefix = text.match(/^(?:[KQRBNSDLT]?[a-h1-8]?[xX]?[a-h][1-8](?:=?[KQRBNSDLT])?[+#]?|[O0]-[O0](?:-[O0])?)(?=.)/i)?.[0];
     const hasTrailingInk = text.length > 5 || /[(:\s]/.test(text) || Boolean(movePrefix && /[0-9(]/.test(text.slice(movePrefix.length)));
     return {
-      scores, symbols, lookup, best: spellingScore(scores, text, symbols, lookup),
+      scores, symbols, lookup, text, best: spellingScore(scores, text, symbols, lookup),
       prefix: hasTrailingInk ? prefixScore(scores, movePrefix ?? text.slice(0, 3), symbols, lookup) : undefined,
     };
   });
-  const primaryWeight = preferLatin ? 0.20 : 0.45;
+  const strongerChessReading = preferLatin && !german
+    && reading.some(view => !view.symbols && looksLikeEnglishMove(view.text))
+    && !reading.some(view => view.symbols && looksLikeEnglishMove(view.text));
+  const primaryWeight = strongerChessReading ? 0.60 : preferLatin ? 0.20 : 0.45;
   const latinWeight = preferLatin ? 1 : 0.85;
   const scoresByMove = new Map();
   const scoreMove = san => {
     if (scoresByMove.has(san)) return scoresByMove.get(san);
     let primary = -Infinity;
+    let cleanPrimaryMatch = false;
     let latin = -Infinity;
     for (const view of views) {
       const forms = view.symbols ? latinSpellings(san, german, preferLatin) : spellings(san, german);
@@ -128,10 +136,15 @@ function readingRanker(reading, german, preferLatin = false) {
         score = Math.max(score, Math.min(1, Math.max(exact, prefix)) - form.penalty);
       }
       if (view.symbols) latin = Math.max(latin, score);
-      else primary = Math.max(primary, score);
+      else {
+        primary = Math.max(primary, score);
+        if (strongerChessReading) {
+          cleanPrimaryMatch ||= forms.some(form => form.penalty <= 0.8 && form.text === view.text);
+        }
+      }
     }
     const score = Number.isFinite(latin) ? primaryWeight * Math.max(-18, primary) + latinWeight * Math.max(-18, latin) : primary;
-    const option = { san, score };
+    const option = { san, score: score + (strongerChessReading && cleanPrimaryMatch ? 0.70 : 0) };
     scoresByMove.set(san, option);
     return option;
   };
