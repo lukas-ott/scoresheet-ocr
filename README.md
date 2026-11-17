@@ -2,6 +2,8 @@
 
 A static browser app for transcribing photographed chess scoresheets.
 
+[Open the live scanner](https://scoresheet-ocr.lukasott1204.workers.dev/)
+
 ## Run locally
 
 ```sh
@@ -66,3 +68,7 @@ directory to `dist`. The scanner runs without authentication.
 
 The library uploads only the PGN and title. If the Supabase configuration
 is empty, the scanner and local PGN export are available without an account.
+
+## License
+
+The project code is available under the [MIT License](LICENSE).
